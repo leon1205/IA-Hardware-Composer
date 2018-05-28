@@ -40,21 +40,8 @@ bool GpuDevice::Initialize() {
 
   initialization_state_ |= kInitialized;
   initialization_state_lock_.unlock();
-  bool use_lock = true;
-  bool use_thread = true;
-
-  lock_fd_ = open("/vendor/hwc.lock", O_RDONLY);
-  if (-1 == lock_fd_) {
-    ITRACE("Failed to open /vendor/hwc.lock file!");
-    use_lock = false;
-  }
 
   display_manager_.reset(DisplayManager::CreateDisplayManager(this));
-
-  if (!InitWorker()) {
-    ETRACE("Failed to initalize thread for GpuDevice. %s", PRINTERROR());
-    use_thread = false;
-  }
 
   bool success = display_manager_->Initialize();
   if (!success) {
@@ -64,10 +51,13 @@ bool GpuDevice::Initialize() {
   HandleHWCSettings();
   InitializeHotPlugEvents();
 
-  if ((use_lock && !use_thread) || (!use_lock && use_thread)) {
-    // Exit thread as we don't need worker thread after
-    // Initialization.
-    HWCThread::Exit();
+  lock_fd_ = open("/vendor/hwc.lock", O_RDONLY);
+  if (-1 != lock_fd_) {
+    if (!InitWorker()) {
+      ETRACE("Failed to initalize thread for GpuDevice. %s", PRINTERROR());
+    }
+  } else {
+    ITRACE("Failed to open /vendor/hwc.lock file!");
   }
 
   return true;
@@ -113,14 +103,6 @@ void GpuDevice::RegisterHotPlugEventCallback(
 }
 
 void GpuDevice::HandleHWCSettings() {
-  initialization_state_lock_.lock();
-  if (initialization_state_ & kHWCSettingsDone) {
-    initialization_state_lock_.unlock();
-    return;
-  }
-
-  initialization_state_ |= kHWCSettingsDone;
-  initialization_state_lock_.unlock();
   // Handle config file reading
   const char *hwc_dp_cfg_path = std::getenv("HWC_DISPLAY_CONFIG");
   if (!hwc_dp_cfg_path) {
@@ -631,20 +613,11 @@ void GpuDevice::DisableHDCPSessionForAllDisplays() {
 }
 
 void GpuDevice::InitializeHotPlugEvents() {
-  initialization_state_lock_.lock();
-  if ((initialization_state_ & kInitializedHotPlugMonitor)) {
-    initialization_state_lock_.unlock();
-    return;
-  }
-
-  initialization_state_ |= kInitializedHotPlugMonitor;
-  initialization_state_lock_.unlock();
   display_manager_->InitializeDisplayResources();
   display_manager_->StartHotPlugMonitor();
 }
 
 void GpuDevice::HandleRoutine() {
-  HandleHWCSettings();
   bool update_ignored = false;
 
   // Iniitialize resources to monitor external events.

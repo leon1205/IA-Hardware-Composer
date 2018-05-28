@@ -84,11 +84,8 @@ class GpuDevice : public HWCThread {
 
  private:
   enum InitializationType {
-    kUnInitialized = 0,         // Nothing Initialized.
-    kHWCSettingsDone = 1 << 0,  // Reading HWC Settings is done.
-    kInitializedHotPlugMonitor =
-        1 << 1,  // Initialized resources to monitor for Hotplug events.
-    kInitialized = 1 << 2  // Everything Initialized
+    kUnInitialized = 0,    // Nothing Initialized.
+    kInitialized = 1 << 0  // Everything Initialized
   };
 
   void HandleHWCSettings();
